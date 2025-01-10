@@ -2,7 +2,9 @@
 
 This project generates unique maze-based artwork inspired by the blockchain activity of an Ethereum address. The artwork is dynamically created by fetching Ethereum transaction data for a given address, adjusting the maze's color scheme, and complexity based on that data.
 
-![Example Maze Art](public/example.png)
+<p align="center">
+  <img src="public/example.png" alt="Example Maze Art" width="300">
+</p>
 
 ## Generate Your Own Maze Art
 
