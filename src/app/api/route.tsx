@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
             display: "flex",
             width: "100%",
             height: "100%",
-            background: "white",
+            background: "#eff0f3",
             justifyContent: "center",
             alignItems: "center",
           }}
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
               position: "relative",
               width: `${width}px`,
               height: `${height}px`,
-              background: "white",
+              background: "#eff0f3",
             }}
           >
             {maze.map((row, rowIndex) =>
@@ -85,11 +85,7 @@ export async function GET(request: NextRequest) {
                   Math.pow(rowIndex - rows / 2, 2) +
                     Math.pow(colIndex - cols / 2, 2)
                 );
-                const gradientColor = isWall
-                  ? colorScheme.walls[
-                      Math.floor(distanceFromCenter) % colorScheme.walls.length
-                    ]
-                  : "white";
+                const gradientColor = isWall ? "#0052ff" : "#eff0f3";
 
                 return (
                   <div
@@ -128,19 +124,8 @@ function generateColorScheme(
   dataHash: number,
   transactionCount: number
 ) {
-  const baseHue = Math.abs(addressHash % 360);
-  const saturationBase = 70 + (Math.abs(dataHash) % 30);
-
-  // Adjust color scheme based on the transaction count
-  const adjustedHue = (baseHue + transactionCount) % 360;
-
-  const wallColors = Array.from({ length: 4 }, (_, i) => {
-    const hue = (adjustedHue + i * 30) % 360;
-    return `hsl(${hue}, ${saturationBase}%, 50%)`;
-  });
-
   return {
-    walls: wallColors,
+    walls: ["#0052ff", "#0052ff", "#0052ff", "#0052ff"],
   };
 }
 
