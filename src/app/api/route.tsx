@@ -1,234 +1,116 @@
 /* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from "next/og";
-import { NextRequest, NextResponse } from "next/server";
-import { isAddress, createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
+import { NextRequest } from "next/server";
+import { isAddress } from "viem";
 
 export const runtime = "edge";
 
-type BaseParams = {
-  address: `0x${string}`;
-  data?: string;
-};
+const colors = ["#F94144", "#F9C74F", "#90BE6D", "#577590"];
+const width = 420;
+const height = 800;
 
-const client = createPublicClient({
-  chain: mainnet,
-  transport: http(),
-});
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const address = searchParams.get("address");
 
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = new URLSearchParams(request.url?.split("?")[1]);
-    const { address, data } = Object.fromEntries(
-      searchParams.entries()
-    ) as BaseParams;
-
-    // Validate Ethereum address
-    if (!address || !isAddress(address)) {
-      return NextResponse.json(
-        { error: "Valid Ethereum address is required" },
-        { status: 400 }
-      );
-    }
-
-    // Fetch Ethereum transaction count for the given address
-    const transactionCount = await client.getTransactionCount({
-      address,
+  if (!address || !isAddress(address)) {
+    return new ImageResponse(<div>Invalid address</div>, {
+      width,
+      height,
     });
-
-    // Use the transaction count to influence art generation
-    const addressHash = hashCode(address);
-    const dataHash = data ? hashCode(data) : 0;
-
-    const width = 420;
-    const height = 420;
-    const cellSize = 30;
-    const cols = Math.floor(width / cellSize);
-    const rows = Math.floor(height / cellSize);
-
-    const colorScheme = generateColorScheme(
-      addressHash,
-      dataHash,
-      transactionCount
-    );
-
-    const maze = generateMaze(cols, rows, address + (data || ""), {
-      branchingFactor: (Math.abs(addressHash) % 3) + 1,
-      deadEndRemovalRate: (Math.abs(dataHash) % 50) / 100,
-    });
-
-    return new ImageResponse(
-      (
-        <div
-          style={{
-            display: "flex",
-            width: "100%",
-            height: "100%",
-            background: "#eff0f3",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              position: "relative",
-              width: `${width}px`,
-              height: `${height}px`,
-              background: "#eff0f3",
-            }}
-          >
-            {maze.map((row, rowIndex) =>
-              row.map((cell, colIndex) => {
-                const isWall = cell === 1;
-                const distanceFromCenter = Math.sqrt(
-                  Math.pow(rowIndex - rows / 2, 2) +
-                    Math.pow(colIndex - cols / 2, 2)
-                );
-                const gradientColor = isWall ? "#0052ff" : "#eff0f3";
-
-                return (
-                  <div
-                    key={`${rowIndex}-${colIndex}`}
-                    style={{
-                      position: "absolute",
-                      width: `${cellSize}px`,
-                      height: `${cellSize}px`,
-                      background: gradientColor,
-                      top: `${rowIndex * cellSize}px`,
-                      left: `${colIndex * cellSize}px`,
-                    }}
-                  />
-                );
-              })
-            )}
-          </div>
-        </div>
-      ),
-      {
-        width,
-        height,
-      }
-    );
-  } catch (error) {
-    console.error("Error generating maze image:", error);
-    return NextResponse.json(
-      { error: "Failed to generate maze image" },
-      { status: 500 }
-    );
   }
+
+  const stack = generateZugzwangStack(address, 20);
+
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          background: "#111",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          fontFamily: "monospace",
+          color: "#fff",
+        }}
+      >
+        <div style={{ fontSize: 24, marginBottom: 20 }}>Zugzwang Stack</div>
+        <div style={{ display: "flex", flexDirection: "column-reverse" }}>
+          {stack.map((row, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                margin: "1px 0",
+              }}
+            >
+              {row.map((color, j) => (
+                <div
+                  key={j}
+                  style={{
+                    width: 40,
+                    height: 20,
+                    background: color || "transparent",
+                    margin: "0 4px",
+                    border: color ? "1px solid #222" : "1px dashed #333",
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 16, marginTop: 20, opacity: 0.7 }}>
+          {shortenAddress(address)}
+        </div>
+      </div>
+    ),
+    { width, height }
+  );
 }
 
-function generateColorScheme(
-  addressHash: number,
-  dataHash: number,
-  transactionCount: number
-) {
-  return {
-    walls: ["#0052ff", "#0052ff", "#0052ff", "#0052ff"],
-  };
+function generateZugzwangStack(address: string, levels: number = 20) {
+  const seed = hashCode(address);
+  const rng = mulberry32(seed);
+  const stack = [];
+
+  for (let i = 0; i < levels; i++) {
+    const missingIndex = Math.floor(rng() * 3);
+    const row = [];
+    for (let j = 0; j < 3; j++) {
+      if (j === missingIndex) {
+        row.push(null);
+      } else {
+        const color = colors[Math.floor(rng() * colors.length)];
+        row.push(color);
+      }
+    }
+    stack.push(row);
+  }
+
+  return stack;
 }
 
-function hashCode(str: string) {
+function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
   }
-  return hash;
+  return Math.abs(hash);
 }
 
-function generateMaze(
-  cols: number,
-  rows: number,
-  seed: string,
-  options: {
-    branchingFactor: number;
-    deadEndRemovalRate: number;
-  }
-) {
-  const seededRandom = () => {
-    const x = Math.sin(hashCode(seed)) * 10000;
-    return x - Math.floor(x);
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
 
-  const maze = Array.from({ length: rows }, () => Array(cols).fill(1));
-  const stack: [number, number][] = [];
-  const start: [number, number] = [1, 1];
-
-  function isValid(x: number, y: number) {
-    return x > 0 && x < rows - 1 && y > 0 && y < cols - 1;
-  }
-
-  function getUnvisitedNeighbors(x: number, y: number) {
-    const directions = [
-      [-2, 0],
-      [2, 0],
-      [0, -2],
-      [0, 2],
-    ];
-
-    if (options.branchingFactor > 1) {
-      directions.push([-2, -2], [-2, 2], [2, -2], [2, 2]);
-    }
-
-    return directions
-      .map(([dx, dy]) => [x + dx, y + dy])
-      .filter(([nx, ny]) => isValid(nx, ny) && maze[nx][ny] === 1)
-      .sort(() => seededRandom() - 0.5);
-  }
-
-  maze[start[0]][start[1]] = 0;
-  stack.push(start);
-
-  while (stack.length > 0) {
-    const [currentX, currentY] = stack[stack.length - 1];
-    const neighbors = getUnvisitedNeighbors(currentX, currentY);
-
-    if (neighbors.length === 0) {
-      stack.pop();
-      continue;
-    }
-
-    const pathCount = Math.min(neighbors.length, options.branchingFactor);
-    for (let i = 0; i < pathCount; i++) {
-      const [nextX, nextY] = neighbors[i];
-      maze[nextX][nextY] = 0;
-      maze[currentX + (nextX - currentX) / 2][
-        currentY + (nextY - currentY) / 2
-      ] = 0;
-      if (i === 0) stack.push([nextX, nextY]);
-    }
-  }
-
-  if (options.deadEndRemovalRate > 0) {
-    for (let i = 1; i < rows - 1; i++) {
-      for (let j = 1; j < cols - 1; j++) {
-        if (maze[i][j] === 0 && seededRandom() < options.deadEndRemovalRate) {
-          let wallCount = 0;
-          if (maze[i - 1][j] === 1) wallCount++;
-          if (maze[i + 1][j] === 1) wallCount++;
-          if (maze[i][j - 1] === 1) wallCount++;
-          if (maze[i][j + 1] === 1) wallCount++;
-          if (wallCount >= 3) maze[i][j] = 1;
-        }
-      }
-    }
-  }
-
-  const entranceExit = [
-    [0, 1],
-    [1, 1],
-    [1, 0],
-    [rows - 1, cols - 2],
-    [rows - 2, cols - 2],
-    [rows - 2, cols - 1],
-  ];
-
-  entranceExit.forEach(([x, y]) => {
-    if (isValid(x, y)) maze[x][y] = 0;
-  });
-
-  return maze;
+function shortenAddress(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
