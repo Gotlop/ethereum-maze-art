@@ -1,10 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
-import { ImageResponse } from "next/og";
-import { NextRequest, NextResponse } from "next/server";
-import { isAddress, createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
+import { ImageResponse } from 'next/og';
+import { NextRequest, NextResponse } from 'next/server';
+import { isAddress, createPublicClient, http } from 'viem';
+import { mainnet } from 'viem/chains';
 
-export const runtime = "edge";
+export const runtime = 'edge';
 
 type BaseParams = {
   address: `0x${string}`;
@@ -18,14 +18,14 @@ const client = createPublicClient({
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = new URLSearchParams(request.url?.split("?")[1]);
+    const searchParams = new URLSearchParams(request.url?.split('?')[1]);
     const { address, data } = Object.fromEntries(
       searchParams.entries()
     ) as BaseParams;
 
     if (!address || !isAddress(address)) {
       return NextResponse.json(
-        { error: "Valid Ethereum address is required" },
+        { error: 'Valid Ethereum address is required' },
         { status: 400 }
       );
     }
@@ -41,50 +41,53 @@ export async function GET(request: NextRequest) {
     const cols = Math.floor(width / cellSize);
     const rows = Math.floor(height / cellSize);
 
-    const maze = generateMaze(cols, rows, address + (data || ""), {
-      branchingFactor: (Math.abs(addressHash) % 3) + 1,
-      deadEndRemovalRate: (Math.abs(dataHash) % 50) / 100,
-    });
+    const maze = generateEmptyMaze(cols, rows);
+    applyRetroJengaPattern(maze, hashCode(address + (data || '')));
 
     return new ImageResponse(
       (
         <div
           style={{
-            display: "flex",
-            width: "100%",
-            height: "100%",
-            background: "#000000",
-            justifyContent: "center",
-            alignItems: "center",
+            display: 'flex',
+            width: '100%',
+            height: '100%',
+            background: '#0d0d0d',
+            justifyContent: 'center',
+            alignItems: 'center',
           }}
         >
           <div
             style={{
-              display: "flex",
-              position: "relative",
+              display: 'flex',
+              position: 'relative',
               width: `${width}px`,
               height: `${height}px`,
-              background: "#000000",
+              background: '#0d0d0d',
             }}
           >
             {maze.map((row, rowIndex) =>
               row.map((cell, colIndex) => {
                 const isWall = cell === 1;
-                const fillColor = getRubikColor(rowIndex, colIndex, addressHash);
-                const borderColor = isWall ? "#000000" : "#dddddd";
+                const fillColor = getRetroColor(rowIndex, colIndex, addressHash);
+                const borderColor = isWall ? '#1a1a1a' : '#333333';
+                const boxShadow = isWall
+                  ? 'inset 0 0 6px rgba(0,0,0,0.6)'
+                  : 'inset 0 0 2px rgba(255,255,255,0.2)';
 
                 return (
                   <div
                     key={`${rowIndex}-${colIndex}`}
                     style={{
-                      position: "absolute",
+                      position: 'absolute',
                       width: `${cellSize}px`,
                       height: `${cellSize}px`,
                       background: fillColor,
                       top: `${rowIndex * cellSize}px`,
                       left: `${colIndex * cellSize}px`,
                       border: `1px solid ${borderColor}`,
-                      boxSizing: "border-box",
+                      boxShadow,
+                      borderRadius: '4px',
+                      boxSizing: 'border-box',
                     }}
                   />
                 );
@@ -99,25 +102,12 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error("Error generating maze image:", error);
+    console.error('Error generating image:', error);
     return NextResponse.json(
-      { error: "Failed to generate maze image" },
+      { error: 'Failed to generate image' },
       { status: 500 }
     );
   }
-}
-
-function getRubikColor(x: number, y: number, seed: number) {
-  const colors = [
-    "#ff0000", // Red
-    "#0000ff", // Blue
-    "#00ff00", // Green
-    "#ffff00", // Yellow
-    "#ffffff", // White
-    "#ffa500", // Orange
-  ];
-  const index = Math.abs((x * 31 + y * 17 + seed) % colors.length);
-  return colors[index];
 }
 
 function hashCode(str: string) {
@@ -130,96 +120,43 @@ function hashCode(str: string) {
   return hash;
 }
 
-function generateMaze(
-  cols: number,
-  rows: number,
-  seed: string,
-  options: {
-    branchingFactor: number;
-    deadEndRemovalRate: number;
-  }
-) {
-  const seededRandom = () => {
-    const x = Math.sin(hashCode(seed)) * 10000;
-    return x - Math.floor(x);
-  };
+function generateEmptyMaze(cols: number, rows: number) {
+  return Array.from({ length: rows }, () => Array(cols).fill(1));
+}
 
-  const maze = Array.from({ length: rows }, () => Array(cols).fill(1));
-  const stack: [number, number][] = [];
-  const start: [number, number] = [1, 1];
+function applyRetroJengaPattern(maze: number[][], seed: number) {
+  const rows = maze.length;
+  const cols = maze[0].length;
 
-  function isValid(x: number, y: number) {
-    return x > 0 && x < rows - 1 && y > 0 && y < cols - 1;
-  }
+  for (let row = 0; row < rows; row++) {
+    const isHorizontal = row % 2 === 0;
 
-  function getUnvisitedNeighbors(x: number, y: number) {
-    const directions = [
-      [-2, 0],
-      [2, 0],
-      [0, -2],
-      [0, 2],
-    ];
-
-    if (options.branchingFactor > 1) {
-      directions.push([-2, -2], [-2, 2], [2, -2], [2, 2]);
+    for (let col = 0; col < cols; col++) {
+      maze[row][col] = 1; // default wall
     }
 
-    return directions
-      .map(([dx, dy]) => [x + dx, y + dy])
-      .filter(([nx, ny]) => isValid(nx, ny) && maze[nx][ny] === 1)
-      .sort(() => seededRandom() - 0.5);
-  }
-
-  maze[start[0]][start[1]] = 0;
-  stack.push(start);
-
-  while (stack.length > 0) {
-    const [currentX, currentY] = stack[stack.length - 1];
-    const neighbors = getUnvisitedNeighbors(currentX, currentY);
-
-    if (neighbors.length === 0) {
-      stack.pop();
-      continue;
-    }
-
-    const pathCount = Math.min(neighbors.length, options.branchingFactor);
-    for (let i = 0; i < pathCount; i++) {
-      const [nextX, nextY] = neighbors[i];
-      maze[nextX][nextY] = 0;
-      maze[currentX + (nextX - currentX) / 2][
-        currentY + (nextY - currentY) / 2
-      ] = 0;
-      if (i === 0) stack.push([nextX, nextY]);
-    }
-  }
-
-  if (options.deadEndRemovalRate > 0) {
-    for (let i = 1; i < rows - 1; i++) {
-      for (let j = 1; j < cols - 1; j++) {
-        if (maze[i][j] === 0 && seededRandom() < options.deadEndRemovalRate) {
-          let wallCount = 0;
-          if (maze[i - 1][j] === 1) wallCount++;
-          if (maze[i + 1][j] === 1) wallCount++;
-          if (maze[i][j - 1] === 1) wallCount++;
-          if (maze[i][j + 1] === 1) wallCount++;
-          if (wallCount >= 3) maze[i][j] = 1;
-        }
+    if (isHorizontal) {
+      // Buat blok Jenga horizontal
+      for (let col = (row + seed) % 3; col < cols - 2; col += 4) {
+        maze[row][col] = 0;
+        maze[row][col + 1] = 0;
+        maze[row][col + 2] = 0;
       }
     }
   }
+}
 
-  const entranceExit = [
-    [0, 1],
-    [1, 1],
-    [1, 0],
-    [rows - 1, cols - 2],
-    [rows - 2, cols - 2],
-    [rows - 2, cols - 1],
+function getRetroColor(x: number, y: number, seed: number) {
+  const retroColors = [
+    '#ff6ec7', // pink neon
+    '#faff00', // yellow electric
+    '#00ffd8', // cyan
+    '#ff8c00', // orange retro
+    '#8aff00', // lime green
+    '#ff61a6', // hot pink
+    '#a070ff', // purple retro
+    '#00a2ff', // sky blue
   ];
-
-  entranceExit.forEach(([x, y]) => {
-    if (isValid(x, y)) maze[x][y] = 0;
-  });
-
-  return maze;
+  const index = Math.abs((x * 31 + y * 17 + seed) % retroColors.length);
+  return retroColors[index];
 }
