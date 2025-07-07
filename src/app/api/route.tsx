@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 import { isAddress } from "viem";
@@ -14,11 +15,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const address = searchParams.get("address");
 
+  // ✅ Validasi Ethereum address seperti web asli
   if (!address || !isAddress(address)) {
-    return new ImageResponse(<div>Invalid address</div>, {
-      width,
-      height,
-    });
+    return new Response(
+      JSON.stringify({ error: "Valid Ethereum address is required" }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 
   const stack = generateZugzwangStack(address, 20);
@@ -62,10 +67,7 @@ export async function GET(req: NextRequest) {
         </div>
       </div>
     ),
-    {
-      width,
-      height,
-    }
+    { width, height }
   );
 }
 
