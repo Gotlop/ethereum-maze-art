@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
           style={{
             width,
             height,
-            background: '#111',
+            background: '#002244',
             position: 'relative',
             display: 'flex',
             justifyContent: 'center',
@@ -52,9 +52,14 @@ export async function GET(request: NextRequest) {
                 width: cellSize,
                 height: cellSize,
                 background: color,
-                boxShadow: `4px 4px 0 ${shadow}`,
                 borderRadius: 4,
-                border: '1px solid #000',
+                border: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: `
+                  2px 2px 0 ${shadow},
+                  0 0 4px ${color},
+                  0 0 8px ${color},
+                  0 0 12px ${color}
+                `,
               }}
             />
           ))}
